@@ -6,3 +6,4 @@ transformers
 accelerate
 imageio[ffmpeg]
 imageio-ffmpeg
+ftfy

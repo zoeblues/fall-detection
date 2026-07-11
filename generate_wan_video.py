@@ -5,7 +5,7 @@ import argparse
 import os
 import time
 
-def generate_video(prompt, image_path=None, output_path="output.mp4", num_frames=81, height=480, width=832, offload=False):
+def generate_video(prompt, image_path=None, output_path="output.mp4", num_frames=33, height=480, width=832, offload=False):
     is_i2v = image_path is not None
     
     # Wybór modelu w zależności od tego, czy podano obrazek startowy
@@ -34,8 +34,12 @@ def generate_video(prompt, image_path=None, output_path="output.mp4", num_frames
 
     # Zarządzanie pamięcią GPU
     if offload:
-        print("Włączono optymalizację pamięci (CPU offload).")
-        pipeline.enable_model_cpu_offload()
+        print("Włączono maksymalną optymalizację pamięci (Sequential CPU offload & VAE Slicing/Tiling).")
+        # Sequential offload is much more aggressive than model offload and is necessary for 14B on <24GB VRAM
+        pipeline.enable_sequential_cpu_offload()
+        if hasattr(pipeline, "vae"):
+            pipeline.vae.enable_slicing()
+            pipeline.vae.enable_tiling()
     else:
         print("Przenoszenie modelu bezpośrednio do pamięci VRAM (Karty Graficznej).")
         pipeline.to("cuda")
@@ -87,7 +91,9 @@ if __name__ == "__main__":
     parser.add_argument("--prompt", type=str, required=True, help="Tekst (prompt) do wygenerowania wideo (najlepiej po angielsku)")
     parser.add_argument("--image", type=str, default=None, help="Opcjonalne: Ścieżka do zdjęcia początkowego. Przełącza skrypt w tryb Image-to-Video.")
     parser.add_argument("--output", type=str, default="wan_video_output.mp4", help="Ścieżka do zapisanego pliku wyjściowego .mp4")
-    parser.add_argument("--frames", type=int, default=81, help="Liczba klatek (domyślnie: 81)")
+    parser.add_argument("--frames", type=int, default=33, help="Liczba klatek (domyślnie: 33, dla ok. 2 sekund wideo)")
+    parser.add_argument("--width", type=int, default=832, help="Szerokość wideo w pikselach (domyślnie: 832)")
+    parser.add_argument("--height", type=int, default=480, help="Wysokość wideo w pikselach (domyślnie: 480)")
     parser.add_argument("--offload", action="store_true", help="Użyj tej flagi, jeśli masz mało pamięci VRAM i chcesz oszczędzać zasoby")
     
     args = parser.parse_args()
@@ -97,4 +103,4 @@ if __name__ == "__main__":
         print("UWAGA: Nie wykryto karty graficznej z CUDA! Generowanie na CPU będzie ekstremalnie wolne i może nie działać prawidłowo.")
         print("Jeśli jesteś podłączony do serwera NVIDIA, upewnij się, że masz poprawne sterowniki i PyTorch z obsługą CUDA.")
         
-    generate_video(args.prompt, args.image, args.output, args.frames, offload=args.offload)
+    generate_video(args.prompt, args.image, args.output, args.frames, args.height, args.width, offload=args.offload)
